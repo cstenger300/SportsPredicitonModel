@@ -11,7 +11,8 @@ GitHub contains source only; datasets and fitted models are generated locally.
 
 ## Run
 
-Python 3.11+ is required; the tested environment uses Python 3.12.
+Python 3.11–3.14 is supported; use Python 3.12, the tested version. Python 3.15
+cannot install the pinned PyArrow wheel. Windows setup explicitly selects 3.12.
 
 ```bash
 cd /workspace/SportsPredicitonModel

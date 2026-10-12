@@ -10,12 +10,32 @@ after each command. You do not need an Administrator window.
 
 ## Install
 
+Use **64-bit Python 3.12** for this project. Python 3.15 is not supported by the
+pinned PyArrow dependency. Install 3.12 alongside your existing Python:
+
 ```powershell
-py -m venv .venv
+winget install --exact --id Python.Python.3.12
+```
+
+Close and reopen PowerShell in the project folder, then check:
+
+```powershell
+py -3.12 --version
+```
+
+If you already created `.venv` with Python 3.15, preserve it before creating the new
+environment (run this rename only once):
+
+```powershell
+Rename-Item .venv .venv-python315
 ```
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -c requirements.lock -e ".[dev]"
+py -3.12 -m venv .venv
+```
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -c requirements.lock -e ".[dev]"
 ```
 
 ```powershell
