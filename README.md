@@ -383,3 +383,8 @@ Review tennis retirements, cancellations, and ties against book rules and import
 explicit `void` when appropriate. The tracker shows won/lost, pending, unit profit,
 ROI excluding void stakes, and exportable history. Preserve the SQLite file for
 continued tracking. No real wagers are placed.
+
+NFL now supports **Download NFL data and analyze** in the multi-sport dashboard.
+This downloads nflverse schedules/play-by-play and builds its own rolling metrics;
+CSV imports are optional for NFL. Fetch sportsbook prices first to include price
+comparisons. See SPORTS_LAB_START.md for caching, data timing, and model limitations.

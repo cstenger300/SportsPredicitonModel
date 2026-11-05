@@ -13,7 +13,7 @@ from sklearn.metrics import brier_score_loss, log_loss
 METRICS = {
     'NBA': ['net_rating', 'effective_fg_pct', 'turnover_pct', 'offensive_rebound_pct', 'free_throw_rate', 'rest_days'],
     'NHL': ['expected_goal_share', 'corsi_share', 'high_danger_share', 'power_play_pct', 'penalty_kill_pct', 'goalie_goals_saved_above_expected'],
-    'NFL': ['epa_per_play', 'success_rate', 'explosive_play_rate', 'pressure_rate', 'opponent_adjusted_rating', 'rest_days'],
+    'NFL': ['epa_per_play', 'success_rate', 'explosive_play_rate', 'sack_rate', 'opponent_adjusted_rating', 'rest_days'],
     'NCAAB': ['adjusted_efficiency_margin', 'effective_fg_pct', 'turnover_pct', 'offensive_rebound_pct', 'free_throw_rate', 'strength_of_schedule'],
     'Tennis': ['surface_elo', 'serve_points_won_pct', 'return_points_won_pct', 'hold_pct', 'break_pct', 'rest_days'],
 }

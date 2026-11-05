@@ -46,6 +46,28 @@ with board:
     if live is not None:
         st.dataframe(live[0], hide_index=True)
         st.download_button('Export events for metric matching', live[0].to_csv(index=False), 'events.csv')
+    if sport == 'NFL':
+        st.subheader('Automatic public NFL data')
+        game_date = st.date_input('NFL game date', pd.Timestamp.now(tz='America/Chicago').date())
+        first_season = st.number_input('First historical season', min_value=2016, max_value=2030, value=2022, step=1)
+        st.caption('Downloads public nflverse play-by-play and builds rolling EPA, success, explosive-play, defensive sack-rate, rest, and opponent-adjusted metrics. Historical files can contain later corrections. Injuries and confirmed starters are not included. First download may take several minutes.')
+        if st.button('Download NFL data and analyze', type='primary'):
+            try:
+                from sports_lab.nfl_feed import load_inputs, align_odds
+                with st.spinner('Downloading NFL history and building pregame metrics…'):
+                    h, u, manifest = load_inputs(ledger.path.parents[2], game_date, int(first_season), refresh=True)
+                    q = pd.DataFrame()
+                    if live is not None and not live[0].empty:
+                        u, q = align_odds(u, live[0], live[1])
+                    forecasts, report = fit_model(h, u, 'NFL')
+                    report['data_source'] = 'nflverse reconstructed historical pregame metrics'
+                    ranked = rank_quotes(forecasts, q, report, 'NFL') if not q.empty else pd.DataFrame()
+                    forecast_store.record(forecasts, report, 'NFL')
+                    st.session_state['analysis_NFL'] = (forecasts, report, ranked)
+                    st.success('NFL data downloaded and analyzed. No metric CSV uploads required.')
+                    st.caption('Source refresh: ' + manifest['retrieved_at'])
+            except (ValueError, KeyError, OSError) as exc:
+                st.error(str(exc))
     history = st.file_uploader('Historical pregame metrics CSV', type='csv', key=f'h_{sport}')
     upcoming = st.file_uploader('Upcoming pregame metrics CSV', type='csv', key=f'u_{sport}')
     quotes_file = st.file_uploader('Optional odds CSV · overrides live prices', type='csv', key=f'q_{sport}')

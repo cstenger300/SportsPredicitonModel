@@ -51,3 +51,27 @@ add walk-forward calibration and candidate/champion promotion using untouched
 future periods; then expand to spread/total markets. Updating ratings, retraining,
 and promoting a model are distinct operations. No automatic model promotion is
 currently enabled, and the app never changes strategy just to exceed 50% accuracy.
+
+## Automatic NFL data
+
+Choose NFL, select a game date, and click **Download NFL data and analyze**.
+No metric CSVs are required for this path. The app downloads the public nflverse
+schedule and regular-season play-by-play, caches historical seasons locally,
+refreshes the current season, and builds shifted rolling metrics. First use may
+need approximately 100 MB or more and several minutes. Raw files are kept in
+`data/raw`; source hashes and generated inputs are saved in `data/sports_lab/nfl`.
+
+For sportsbook comparisons, fetch current prices first, then run the automatic
+NFL analysis. The app matches both teams and kickoff times before using provider
+IDs. No odds key is needed for the public-data forecasts alone. Models use rolling
+EPA, success and explosive-play rates, defensive sack rate, rest, and opponent-
+adjusted EPA ratings. Sack rate is not pressure rate. This does not yet include
+confirmed starters, injuries, or calibrated probabilities. Historical source files
+may contain later corrections; reconstructed input dates are not proof of actual
+historical publication times. No profitable-betting claim is implied by validation.
+
+The automatic feed was checked on current data for November 8, 2026 (13 upcoming
+games) and a historical replay for December 3, 2023 (11 upcoming games). Provider
+availability and future schedule changes can affect later requests. Other sports
+still require metric imports. This feature fetches and computes data when requested;
+it does not run unattended while the app is closed.
