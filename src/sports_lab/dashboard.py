@@ -5,6 +5,7 @@ import streamlit as st
 from sports_lab.core import METRICS, Ledger, fit_model, rank_quotes
 from sports_lab import provider
 from sports_lab.performance import ForecastStore
+from sports_lab.recommendations import summarize_quotes
 st.set_page_config(page_title='Sports Edge Lab', page_icon='📊', layout='wide')
 st.title('Sports Edge Lab')
 st.caption('NBA · NHL · NFL · NCAAB · Tennis | Advanced metrics · Sportsbook comparison · Paper results')
@@ -97,19 +98,41 @@ with board:
         if ranked.empty:
             st.info('Fetch prices or import quotes to compare sportsbooks.')
         else:
-            st.dataframe(ranked.drop(columns='validation'), hide_index=True)
-            st.download_button('Export analysis', ranked.to_csv(index=False), 'analysis.csv')
-            candidates = ranked.loc[ranked.eligible]
+            best = summarize_quotes(ranked)
+            st.subheader('Best displayed selection per game')
+            st.caption('One selection per game, ranked by estimated return. Prices are compared among fresh quotes passing the candidate checks. Model probability is not a calibrated confidence level.')
+            display = best[['matchup','selection','bookmaker','american_odds','probability','break_even','edge','expected_return','status']].rename(columns={
+                'matchup':'Game','selection':'Selection','bookmaker':'Sportsbook','american_odds':'American odds',
+                'probability':'Model win probability','break_even':'Break-even probability','edge':'Probability difference',
+                'expected_return':'Estimated return','status':'Status'})
+            st.dataframe(display.style.format({'Model win probability':'{:.1%}','Break-even probability':'{:.1%}',
+                'Probability difference':'{:+.1%}','Estimated return':'{:+.1%}'}), hide_index=True)
+            for item in best.to_dict('records'):
+                with st.expander(f"{item['selection']} · {item['bookmaker']} {item['american_odds']:+g} · Why this price?"):
+                    if item['large_disagreement']:
+                        st.warning('Large model–price disagreement (at least 10 percentage points versus break-even). This is a review flag, not evidence of a strong edge. Check participant matching, injuries, confirmed starters, and calibration. No market-consensus adjustment has been made.')
+                    st.write('Prediction: ' + item['prediction_reason'])
+                    st.write('Price: ' + item['price_reason'])
+                    st.caption('Missing inputs: confirmed starters and injury adjustments. Winning probability and price value are different: an underdog can have estimated value without being the likely winner.')
+                    alternatives = ranked.loc[ranked.event_id.eq(item['event_id']) & ranked.side.eq(item['side'])]
+                    st.write('Other sportsbook prices for this selection')
+                    st.dataframe(alternatives[['bookmaker','american_odds','observed_at','source_updated_at']],hide_index=True)
+            with st.expander('All quotes · both sides'):
+                st.dataframe(ranked.drop(columns='validation'),hide_index=True)
+            st.download_button('Export recommendations',best.drop(columns='validation').to_csv(index=False),'recommendations.csv')
+            st.download_button('Export all quotes', ranked.to_csv(index=False), 'analysis.csv')
+            candidates = best.loc[best.eligible]
             if candidates.empty:
-                st.info('No qualifying paper candidates in this snapshot.')
+                st.info('No qualifying paper candidates in this snapshot. Refresh prices and analyze again if quotes are stale.')
             else:
-                selected = st.selectbox('Track a candidate', candidates.index, format_func=lambda i: f"{ranked.loc[i,'selection']} · {ranked.loc[i,'bookmaker']} · {ranked.loc[i,'american_odds']:+g}")
+                selected = st.selectbox('Track a candidate', candidates.index, format_func=lambda i: f"{best.loc[i,'selection']} · {best.loc[i,'bookmaker']} · {best.loc[i,'american_odds']:+g}")
                 if st.button('Record one-unit paper pick'):
                     try:
-                        added = ledger.record(ranked.loc[selected].to_dict())
+                        added = ledger.record(best.loc[selected].to_dict())
                         st.success('Recorded original price and forecast.' if added else 'A pick already exists for this event.')
                     except ValueError as e:
                         st.error(str(e))
+
 with tracker:
     auto_scores = st.checkbox('Automatically refresh final scores every 15 minutes while open', value=False)
     st.caption('Uses The Odds API quota. Checks the selected sport/tournament; catches up on load when enabled. Older than three days or unsupported score feeds require reviewed CSV results.')

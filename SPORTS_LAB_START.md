@@ -75,3 +75,19 @@ games) and a historical replay for December 3, 2023 (11 upcoming games). Provide
 availability and future schedule changes can affect later requests. Other sports
 still require metric imports. This feature fetches and computes data when requested;
 it does not run unattended while the app is closed.
+
+## Recommendation display
+
+The main table now shows one best displayed selection per game rather than a row
+for every bookmaker. Fresh qualifying quotes are preferred; other book prices
+for the selected side appear under the explanation, and both sides remain in
+All quotes. Prediction reasoning and price reasoning are separate. Probabilities,
+break-even rates, and estimated returns are formatted as percentages.
+
+A difference of at least 10 percentage points between model probability and a
+quote's break-even probability triggers a review warning. This is a transparent
+UI heuristic, not a validated confidence threshold or no-vig market comparison.
+It does not prove an edge or automatically block a paper candidate. Quotes become
+ineligible for recording after 15 minutes or game start; refresh and analyze again.
+Existing paper-pick snapshots are unchanged. Export recommendations for the summary
+or export all quotes for the full comparison.
