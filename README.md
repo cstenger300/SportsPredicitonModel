@@ -1,3 +1,5 @@
+> For the multi-sport Windows app, start with [SPORTS_LAB_START.md](SPORTS_LAB_START.md) and double-click `Start-Sports-Lab.cmd`. The NFL research pipeline below remains available.
+
 # NFL Prediction Model
 
 A first research pipeline for NFL pregame scoring predictions. It downloads public
@@ -339,3 +341,45 @@ Dashboard readiness was checked through HTTP responses and Streamlit AppTest,
 including rendered forecasts/prices and disabled betting controls for unreviewed
 inputs. Provider and settlement fixtures are automated tests, not claims of
 successful live odds access or completed prospective paper betting.
+
+## Multi-sport Sports Edge Lab
+
+Run the NBA, NHL, NFL, NCAAB, and tennis research dashboard:
+
+```bash
+.venv/bin/streamlit run src/sports_lab/dashboard.py --server.address 127.0.0.1 \
+  --server.port 8502 --server.headless true --browser.gatherUsageStats false
+```
+
+Choose a sport and open **Data and methodology** for CSV templates and model
+assumptions. Supply authentic historical and upcoming pregame metric differences
+(home minus away); at least 100 historical events are required per sport. Advanced
+metric feeds are not bundled. Existing NFL research commands remain available.
+The multi-sport models are separate standardized logistic regressions, not the
+existing NFL scoring pipeline. Chronological validation, Brier scores, a historical
+baseline, and feature contributions accompany each model. Probabilities are
+uncalibrated research estimates; no high-confidence or profitability claim is made.
+
+Configure `ODDS_API_KEY` securely in environment settings and allow
+`api.the-odds-api.com`. Restart after credential changes. Fetch moneyline prices
+on demand; tennis first loads active tournament keys. Download provider events to
+match IDs, participants, and start times to your upcoming metrics. Requests consume
+provider quota. Manual timestamped odds CSV imports also work. Three-way markets,
+spreads, totals, and props are not supported in this initial multi-sport version.
+Only compare two-way full-game markets with matching sportsbook settlement rules.
+
+The app ranks quotes by estimated return and gates paper candidates using a 3%
+minimum estimated return, 15-minute freshness, validation performance, and an
+out-of-distribution check. It preserves the latest quote per book/side and explains
+model contributions in home-direction log-odds. These are statistical associations,
+not causal explanations or calibrated confidence intervals.
+
+Record at most one one-unit paper pick per sport/event before start. SQLite stores
+immutable original prices and model snapshots in `data/sports_lab/paper.sqlite`.
+Refresh final scores explicitly or import reviewed results to settle pending picks;
+no unattended polling runs. Score support depends on sport/provider subscription,
+and the API request covers the last three days. Older results need CSV import.
+Review tennis retirements, cancellations, and ties against book rules and import an
+explicit `void` when appropriate. The tracker shows won/lost, pending, unit profit,
+ROI excluding void stakes, and exportable history. Preserve the SQLite file for
+continued tracking. No real wagers are placed.
