@@ -28,6 +28,17 @@ def fetch_games(sport, start, end, cache, refresh=False):
             response.raise_for_status();payload=response.json()
         except requests.HTTPError as exc:
             status=exc.response.status_code if exc.response is not None else 'unknown'
+            if status==400 and start<end:
+                frames=[];events=[]
+                for day in pd.date_range(start,end):
+                    frames.append(fetch_games(sport,day,day,cache,refresh))
+                    day_file=cache/f'{sport}_{day.date()}_{day.date()}.json'
+                    events.extend(json.loads(day_file.read_text())['events'])
+                # Cache the range only after every daily request completed successfully.
+                temporary=target.with_suffix('.tmp')
+                temporary.write_text(json.dumps({'events':events}))
+                temporary.replace(target)
+                return pd.concat(frames,ignore_index=True).drop_duplicates('event_id')
             raise ValueError(f'Public college feed returned HTTP {status} for {sport}, {start} through {end}. No invented data was substituted.') from None
         except requests.Timeout:
             raise ValueError(f'Public college request timed out for {sport}, {start} through {end}. Retry; cached completed downloads will be reused.') from None
@@ -150,8 +161,19 @@ def load(root,sport,date,now=None):
     start=pd.Timestamp(date)-pd.Timedelta(days=550)
     end=pd.Timestamp(date)-pd.Timedelta(days=1)
     chunks=[]
-    for day in pd.date_range(start,end,freq='14D'):
-        last=min(day+pd.Timedelta(days=13),end)
+    # Historical baseline covers ordinary competitive seasons, not exhibitions/spring games.
+    if sport=='NCAAB':
+        eligible=[day for day in pd.date_range(start,end) if day.month in [11,12,1,2,3] or (day.month==4 and day.day<=15)]
+    else:
+        eligible=[day for day in pd.date_range(start,end) if day.month in [8,9,10,11,12,1]]
+    windows=[]
+    for day in eligible:
+        if not windows or day>windows[-1][-1]+pd.Timedelta(days=1) or len(windows[-1])>=14:
+            windows.append([day])
+        else:
+            windows[-1].append(day)
+    for window in windows:
+        day,last=window[0],window[-1]
         chunks.append(fetch_games(sport,day,last,cache,refresh=last.date()>=(now-pd.Timedelta(days=3)).date()))
     history=pd.concat(chunks,ignore_index=True).drop_duplicates('event_id')
     return history,today

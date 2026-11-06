@@ -170,3 +170,12 @@ tonight's live availability must be checked from the Windows app. Windows users
 do not need to change cloud settings. An additive ESPN allowlist requirement was
 saved to the cloud draft for future validation; that save does not apply runtime
 policy. Paid odds calls consume your provider quota.
+
+College history requests are restricted to ordinary competitive-season windows:
+NCAAB November–March plus April 1–15, and NCAAF August–January. Exhibition,
+spring-football, and exceptional off-calendar games are not included in this
+baseline's historical collection. Selected-date schedules are still requested
+explicitly. If ESPN rejects a multi-day request with HTTP 400, the collector
+retries individual dates and caches the range only after every daily request
+succeeds. A daily error is surfaced, never silently treated as an empty schedule.
+Daily fallback can increase first-run download time; subsequent runs reuse caches.

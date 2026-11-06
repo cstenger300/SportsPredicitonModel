@@ -98,5 +98,39 @@ def test_multiday_dates_and_http_error_diagnosis(monkeypatch,tmp_path):
     monkeypatch.setattr(college.requests,'get',get)
     with pytest.raises(ValueError,match='HTTP 400.*NCAAF'):
         college.fetch_games('NCAAF','2026-11-01','2026-11-06',tmp_path)
-    assert dates==['20261101-20261106']
+    assert dates==['20261101-20261106','20261101']
     assert not list(tmp_path.glob('*.json'))
+
+def test_rejected_range_falls_back_to_single_days_and_reuses_cache(monkeypatch,tmp_path):
+    import requests
+    calls=[]
+    class Response:
+        def raise_for_status(self):pass
+        def json(self):return {'events':[]}
+    def get(*args,**kwargs):
+        date=kwargs['params']['dates'];calls.append(date)
+        if '-' in date:
+            response=requests.Response();response.status_code=400
+            raise requests.HTTPError(response=response)
+        return Response()
+    monkeypatch.setattr(college.requests,'get',get)
+    result=college.fetch_games('NCAAB','2025-11-01','2025-11-03',tmp_path)
+    assert result.empty
+    assert calls==['20251101-20251103','20251101','20251102','20251103']
+    college.fetch_games('NCAAB','2025-11-01','2025-11-03',tmp_path)
+    assert len(calls)==4
+
+
+def test_load_skips_offseason_and_never_crosses_a_gap(monkeypatch,tmp_path):
+    windows=[]
+    def fetch(sport,start,end,cache,refresh=False):
+        start,end=pd.Timestamp(start),pd.Timestamp(end)
+        windows.append((start,end))
+        row=upcoming().copy()
+        row['completed']=False;row['home_score']=float('nan');row['away_score']=float('nan')
+        return row
+    monkeypatch.setattr(college,'fetch_games',fetch)
+    college.load(tmp_path,'NCAAB','2026-11-06',NOW)
+    for start,end in windows[1:]:
+        assert all(d.month in [11,12,1,2,3] or (d.month==4 and d.day<=15) for d in pd.date_range(start,end))
+        assert (end-start).days<14
