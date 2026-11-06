@@ -60,6 +60,7 @@ def test_fetch_only_completed_scores_and_cache(monkeypatch,tmp_path):
     assert pd.isna(f.iloc[0].home_score)
     college.fetch_games('NCAAB','2026-11-06','2026-11-06',tmp_path)
     assert len(calls)==1
+    assert calls[0]['params']['dates']=='20261106'
 
 
 def test_final_scores_use_mapping_and_ignore_unfinished_games(tmp_path,monkeypatch):
@@ -85,3 +86,17 @@ def test_college_controls_render_without_api_key(tmp_path,monkeypatch,sport):
     assert not app.exception
     assert any(b.label=='Download '+sport+' data and analyze' for b in app.button)
     assert any('experimental Elo' in h.value for h in app.subheader)
+
+def test_multiday_dates_and_http_error_diagnosis(monkeypatch,tmp_path):
+    import requests
+    dates=[]
+    def get(*args,**kwargs):
+        dates.append(kwargs['params']['dates'])
+        response=requests.Response()
+        response.status_code=400
+        raise requests.HTTPError(response=response)
+    monkeypatch.setattr(college.requests,'get',get)
+    with pytest.raises(ValueError,match='HTTP 400.*NCAAF'):
+        college.fetch_games('NCAAF','2026-11-01','2026-11-06',tmp_path)
+    assert dates==['20261101-20261106']
+    assert not list(tmp_path.glob('*.json'))

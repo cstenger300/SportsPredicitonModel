@@ -24,10 +24,17 @@ def fetch_games(sport, start, end, cache, refresh=False):
     else:
         try:
             response=requests.get('https://site.api.espn.com/apis/site/v2/sports/'+PATHS[sport]+'/scoreboard',
-                params={'dates':start.strftime('%Y%m%d')+'-'+end.strftime('%Y%m%d'),'groups':50 if sport=='NCAAB' else 80,'limit':1000},timeout=(15,60))
+                params={'dates':start.strftime('%Y%m%d') if start==end else start.strftime('%Y%m%d')+'-'+end.strftime('%Y%m%d'),'groups':50 if sport=='NCAAB' else 80,'limit':1000},timeout=(15,60))
             response.raise_for_status();payload=response.json()
-        except (requests.RequestException,ValueError):
-            raise ValueError('Public college data unavailable. Check Internet access to site.api.espn.com and retry. No invented games or predictions were substituted.') from None
+        except requests.HTTPError as exc:
+            status=exc.response.status_code if exc.response is not None else 'unknown'
+            raise ValueError(f'Public college feed returned HTTP {status} for {sport}, {start} through {end}. No invented data was substituted.') from None
+        except requests.Timeout:
+            raise ValueError(f'Public college request timed out for {sport}, {start} through {end}. Retry; cached completed downloads will be reused.') from None
+        except requests.RequestException:
+            raise ValueError('Cannot connect to site.api.espn.com. Check the Python connection, proxy, and certificate trust.') from None
+        except ValueError:
+            raise ValueError('Public college feed returned invalid JSON.') from None
         if not isinstance(payload,dict) or not isinstance(payload.get('events'),list):
             raise ValueError('Public college feed returned an unexpected format.')
         tmp=target.with_suffix('.tmp');tmp.write_text(json.dumps(payload));tmp.replace(target)
