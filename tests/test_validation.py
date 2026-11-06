@@ -60,3 +60,16 @@ def test_validation_ui_does_not_change_live_model(tmp_path,monkeypatch):
     assert not app.exception
     assert any(m.label=='Calibration candidate Brier' for m in app.metric)
     assert 'analysis_NFL' not in app.session_state
+
+def test_season_reliability_counts_and_exact_bin_boundaries():
+    from sports_lab.validation import reliability
+    report=validate_history(history(),'NFL')
+    bins=report['reliability_by_season']
+    for (_,model),group in bins.groupby(['season','model']):
+        assert group.games.sum()==120
+    rows=pd.DataFrame(dict(home_win=[0,1,1,1],probability=[.5,.6,.7,1.0],calibrated_probability=[.5,.6,.7,1.0]))
+    buckets=reliability(rows)
+    raw=buckets.loc[buckets.model.eq('Uncalibrated')]
+    assert raw.probability_range.tolist()==['50%–60%','60%–70%','70%–80%','90%–100%']
+    assert raw.games.sum()==4
+    assert raw.sample_note.str.startswith('Small sample').all()

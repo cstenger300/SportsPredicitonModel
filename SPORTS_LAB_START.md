@@ -117,3 +117,12 @@ including input hash and latest result timestamp. Re-run after refreshing data.
 No live probability, model version, or saved paper pick is changed. A candidate
 calibrator is not automatically adopted even when one period improves. These
 reviewed periods become development data; future promotion needs new evidence.
+
+The validation report also includes `reliability_by_season.csv`, a season selector,
+and a focused 50–60% table. Calibration gap is observed minus predicted home-win
+rate in percentage points. Negative gaps indicate overprediction in that group.
+Cells below 30 games are flagged as small samples; 30 is a display heuristic,
+not a statistical-significance threshold. Calibrated and uncalibrated bins can
+contain different games, so their bin win rates are not paired comparisons.
+Reviewed bins must not be used to automatically reverse selections or tune a
+strategy without new out-of-sample evaluation.

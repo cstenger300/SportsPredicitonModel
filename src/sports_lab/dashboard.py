@@ -226,9 +226,16 @@ with performance_tab:
             st.dataframe(result['reliability'],hide_index=True)
             plot = result['reliability'].pivot(index='mean_probability',columns='model',values='observed_home_win_rate')
             st.scatter_chart(plot,x_label='Mean predicted home win probability',y_label='Observed home win rate')
+            st.write('Calibration by season')
+            season_bins = result['reliability_by_season']
+            chosen_season = st.selectbox('Calibration season to inspect', sorted(season_bins.season.unique()), key='calibration_season')
+            st.dataframe(season_bins.loc[season_bins.season.eq(chosen_season)],hide_index=True)
+            st.caption('Calibration gap is observed minus predicted probability in percentage points. Negative means overprediction in that group. Fewer than 30 games is flagged for context; it is not a significance test. Do not reverse picks or tune a strategy to these bins.')
+            st.write('Focus: 50–60% predicted home win probability')
+            st.dataframe(season_bins.loc[season_bins.probability_range.eq('50%–60%')],hide_index=True)
             st.write('Breakdown by model direction · not sportsbook favorites/underdogs')
             st.dataframe(result['directions'],hide_index=True)
             for limitation in summary['limitations']:
                 st.caption(limitation)
-            for name in ['seasons','predictions','reliability','directions']:
+            for name in ['seasons','predictions','reliability','reliability_by_season','directions']:
                 st.download_button('Export validation '+name,result[name].to_csv(index=False),f'validation_{name}.csv')

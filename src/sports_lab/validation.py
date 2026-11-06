@@ -14,8 +14,8 @@ from sports_lab.core import METRICS, validate_games, now_utc, utc
 def reliability(predictions):
     rows = []
     for name, column in [('Uncalibrated','probability'),('Calibrated candidate','calibrated_probability')]:
-        for lower in np.arange(0,1,.1):
-            upper = lower+.1
+        for bucket in range(10):
+            lower, upper = bucket/10, (bucket+1)/10
             group = predictions.loc[(predictions[column]>=lower) & ((predictions[column]<upper) if upper<.999 else (predictions[column]<=1))]
             if group.empty:
                 continue
@@ -27,7 +27,9 @@ def reliability(predictions):
             half = z*np.sqrt(observed*(1-observed)/n+z*z/(4*n*n))/(1+z*z/n)
             rows.append(dict(model=name,probability_range=f'{lower:.0%}–{upper:.0%}',games=n,
                 mean_probability=float(group[column].mean()),observed_home_win_rate=observed,
-                interval_low=center-half,interval_high=center+half))
+                interval_low=center-half,interval_high=center+half,
+                calibration_gap_pp=100*(observed-float(group[column].mean())),
+                sample_note="Small sample: fewer than 30 games" if n<30 else "Review interval and season context"))
     return pd.DataFrame(rows)
 
 
@@ -108,7 +110,10 @@ def validate_history(history, sport, now=None):
           'Calibration candidate was fixed in advance; inspecting this report makes these periods development data.',
           'Reliability intervals assume independent observations; repeated teams and changing seasons can invalidate that assumption.',
           'Calendar-year folds are used only when a season column is unavailable.'])
+    seasonal_reliability = pd.concat([reliability(group).assign(season=int(season))
+        for season,group in combined.groupby('season')],ignore_index=True)
     return dict(summary=summary,seasons=pd.DataFrame(folds),predictions=combined,
+                reliability_by_season=seasonal_reliability,
                 reliability=reliability(combined),directions=pd.DataFrame(by_direction))
 
 
@@ -116,5 +121,5 @@ def save_report(report, directory):
     directory=Path(directory)
     directory.mkdir(parents=True,exist_ok=True)
     (directory/'summary.json').write_text(json.dumps(report['summary'],indent=2))
-    for name in ['seasons','predictions','reliability','directions']:
+    for name in ['seasons','predictions','reliability','reliability_by_season','directions']:
         report[name].to_csv(directory/f'{name}.csv',index=False)
