@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import requests
 from sports_lab.core import now_utc
-KEYS = {'NBA':'basketball_nba','NHL':'icehockey_nhl','NFL':'americanfootball_nfl','NCAAB':'basketball_ncaab'}
+KEYS = {'NBA':'basketball_nba','NHL':'icehockey_nhl','NFL':'americanfootball_nfl','NCAAB':'basketball_ncaab','NCAAF':'americanfootball_ncaaf'}
 def get(path, params=None):
     key = os.environ.get('ODDS_API_KEY')
     if not key:

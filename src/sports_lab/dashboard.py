@@ -8,7 +8,7 @@ from sports_lab.performance import ForecastStore
 from sports_lab.recommendations import summarize_quotes
 st.set_page_config(page_title='Sports Edge Lab', page_icon='📊', layout='wide')
 st.title('Sports Edge Lab')
-st.caption('NBA · NHL · NFL · NCAAB · Tennis | Advanced metrics · Sportsbook comparison · Paper results')
+st.caption('NBA · NHL · NFL · NCAAB · NCAAF · Tennis | Advanced metrics · Sportsbook comparison · Paper results')
 sport = st.sidebar.selectbox('Sport', list(METRICS))
 st.sidebar.info('Moneylines only. Research probabilities are not calibrated confidence levels. No real wagers are placed.')
 ledger = Ledger(Path(__file__).resolve().parents[2] / 'data/sports_lab/paper.sqlite')
@@ -69,6 +69,41 @@ with board:
                     st.caption('Source refresh: ' + manifest['retrieved_at'])
             except (ValueError, KeyError, OSError) as exc:
                 st.error(str(exc))
+    if sport in ['NCAAB','NCAAF']:
+        st.subheader('Automatic public college data · experimental Elo baseline')
+        college_date = st.date_input('College game date', pd.Timestamp.now(tz='America/Chicago').date(), key='college_date_'+sport)
+        st.warning('This first college model uses game results and Elo ratings, not the advanced-metric CSV model. It does not include injuries, transfers, current starters, or adjusted efficiency/EPA. Offseason ratings shrink toward average. Use only for paper workflow testing.')
+        st.caption('Downloads about 18 months of public ESPN results with local caching. First run may take several minutes. Names and start times must match exactly for sportsbook comparisons; unmatched events are skipped.')
+        if st.button('Show '+sport+' schedule for selected date'):
+            try:
+                from sports_lab.college import fetch_games
+                schedule = fetch_games(sport,college_date,college_date,ledger.path.parents[2]/'data/sports_lab/college',refresh=True)
+                if schedule.empty:
+                    st.info('No games returned for this date.')
+                else:
+                    schedule['Start · Central']=pd.to_datetime(schedule.commence_time,utc=True).dt.tz_convert('America/Chicago').dt.strftime('%b %d %I:%M %p %Z')
+                    schedule['State']=schedule.apply(lambda r: 'Final' if r.completed else 'Started / status not final' if pd.Timestamp(r.commence_time)<=pd.Timestamp.now(tz='UTC') else 'Upcoming',axis=1)
+                    st.dataframe(schedule[['home','away','Start · Central','State']],hide_index=True)
+            except (ValueError,KeyError,OSError) as exc:
+                st.error(str(exc))
+        if st.button('Download '+sport+' data and analyze',type='primary'):
+            try:
+                from sports_lab.college import load, forecast, align_events, save_mapping
+                with st.spinner('Downloading college results and evaluating the Elo baseline…'):
+                    h,u = load(ledger.path.parents[2],sport,college_date)
+                    q = pd.DataFrame()
+                    if live is not None and not live[0].empty:
+                        total=len(u)
+                        u,q=align_events(u,live[0],live[1])
+                        save_mapping(ledger.path.parents[2],sport,u)
+                        st.caption(f'Matched {len(u)} of {total} public games to sportsbook events. Unmatched games were not priced.')
+                    forecasts,report=forecast(h,u,sport)
+                    ranked=rank_quotes(forecasts,q,report,sport) if not q.empty else pd.DataFrame()
+                    forecast_store.record(forecasts,report,sport)
+                    st.session_state['analysis_'+sport]=(forecasts,report,ranked)
+                    st.success('College baseline forecasts ready. These are not validated advanced-metric recommendations.')
+            except (ValueError,KeyError,OSError) as exc:
+                st.error(str(exc))
     history = st.file_uploader('Historical pregame metrics CSV', type='csv', key=f'h_{sport}')
     upcoming = st.file_uploader('Upcoming pregame metrics CSV', type='csv', key=f'u_{sport}')
     quotes_file = st.file_uploader('Optional odds CSV · overrides live prices', type='csv', key=f'q_{sport}')
@@ -90,6 +125,9 @@ with board:
     analysis = st.session_state.get(f'analysis_{sport}')
     if analysis:
         forecasts, report, ranked = analysis
+        if report.get('model_type'):
+            st.warning(report['model_type'])
+            st.caption(report.get('limitations',''))
         c = st.columns(3)
         c[0].metric('Validation Brier · lower is better', f"{report['brier']:.3f}")
         c[1].metric('Baseline Brier', f"{report['baseline_brier']:.3f}")
@@ -155,6 +193,14 @@ with tracker:
             st.success(f'{ledger.settle(results)} picks settled.')
         except ValueError as e:
             st.error(str(e))
+    if sport in ['NCAAB','NCAAF'] and st.button('Refresh college finals from public data'):
+        try:
+            from sports_lab.college import final_results
+            results=final_results(ledger.path.parents[2],sport)
+            forecast_store.settle(results)
+            st.success(f'{ledger.settle(results)} college paper picks settled.')
+        except (ValueError,KeyError,OSError) as exc:
+            st.error(str(exc))
     uploaded = st.file_uploader('Reviewed final results CSV', type='csv')
     if uploaded and st.button('Settle imported results'):
         try:

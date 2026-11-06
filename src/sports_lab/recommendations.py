@@ -25,7 +25,9 @@ def summarize_quotes(quotes, now=None):
         'These calculations depend on an uncalibrated probability.',axis=1)
     best['prediction_reason'] = best.apply(lambda r:
         f"Model favors {'the selected side' if r.probability > .5 else 'the opponent' if r.probability < .5 else 'neither side'} "
-        f"on win probability. Feature contributions below are relative to the model baseline and always point toward the home team: {r.why}",axis=1)
+        f"on win probability. " +
+        (("Results-only rating inputs: " if isinstance(r.get('validation'),dict) and r['validation'].get('model_type') else
+          "Feature contributions below are relative to the model baseline and always point toward the home team: ") + str(r.why)),axis=1)
     best['status'] = best.apply(lambda r:
         'Pass: quote stale or game started' if not r.fresh else
         ('Paper candidate · review large market disagreement' if r.eligible and r.large_disagreement else

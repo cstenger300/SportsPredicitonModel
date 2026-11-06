@@ -388,3 +388,9 @@ NFL now supports **Download NFL data and analyze** in the multi-sport dashboard.
 This downloads nflverse schedules/play-by-play and builds its own rolling metrics;
 CSV imports are optional for NFL. Fetch sportsbook prices first to include price
 comparisons. See SPORTS_LAB_START.md for caching, data timing, and model limitations.
+
+NCAAB and NCAAF also support automatic public schedules/results for experimental
+**results-only Elo** paper testing. These college baselines do not yet use the
+advanced metrics or current-player context described in the roadmap. See
+SPORTS_LAB_START.md for setup, provider requirements, exact matching, and public
+final-score settlement.

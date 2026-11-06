@@ -126,3 +126,47 @@ not a statistical-significance threshold. Calibrated and uncalibrated bins can
 contain different games, so their bin win rates are not paired comparisons.
 Reviewed bins must not be used to automatically reverse selections or tune a
 strategy without new out-of-sample evaluation.
+
+## College paper testing: NCAAB and NCAAF
+
+Both sports are now available in the Sport dropdown. NCAAF uses The Odds API key
+`americanfootball_ncaaf`; NCAAB uses `basketball_ncaab`. Select a local game date,
+fetch current sportsbook prices, then choose **Download NCAAB data and analyze**
+or **Download NCAAF data and analyze**. **Show [sport] schedule for selected date**
+checks the public schedule without first downloading history. Games already
+started are not forecast. No games are fabricated when a feed returns nothing.
+
+The automatic college path is an experimental results-only Elo baseline, separate
+from the advanced-metric CSV model. It is NOT an implementation of KenPom-style
+adjusted efficiencies, possession statistics, or college football EPA. Current
+starters, injuries, transfers, roster continuity, and coaching changes are absent.
+K=24, home-rating advantage=55 Elo points (zero at neutral sites), and 50%
+offseason shrinkage are fixed exploratory defaults, not tuned validated settings.
+The baseline should only be used to test the paper workflow. The final 20% of
+historical games are evaluated in chronological sequence; ratings update only
+after conservatively estimated result availability. Baseline comparisons use only
+results available before the validation cutoff. Reports do not claim calibration
+or profitable betting.
+
+The app caches about 550 days of ESPN scoreboard results in
+`data/sports_lab/college`, splits potentially truncated requests, and blocks
+candidates for participants with fewer than 10 observed prior games. Names must
+match after punctuation/case normalization and start times must be within 15
+minutes. No fuzzy team-name guesses are made. Unmatched games are skipped or
+reported explicitly. The provider may not publish all events or historical data.
+
+For settlement, use **Refresh college finals from public data** in Results tracker
+if The Odds API scores endpoint does not support your sport/subscription. Public
+IDs are mapped to matched sportsbook IDs in local event-mapping CSVs; preserve
+these files along with your SQLite database. This public refresh covers the last
+three days and uses the provider's completed status, not the presence of scores.
+Reviewed CSV imports remain available for exceptional or older results.
+
+Source requirements: HTTPS access to `site.api.espn.com` and, for odds,
+`api.the-odds-api.com`. No ESPN credential is used. A network/format failure stops
+analysis instead of substituting invented data. Fixtures and UI tests pass, but
+live ESPN access was blocked by the cloud network policy during development;
+tonight's live availability must be checked from the Windows app. Windows users
+do not need to change cloud settings. An additive ESPN allowlist requirement was
+saved to the cloud draft for future validation; that save does not apply runtime
+policy. Paid odds calls consume your provider quota.
