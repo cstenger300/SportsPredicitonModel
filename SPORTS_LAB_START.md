@@ -91,3 +91,29 @@ It does not prove an edge or automatically block a paper candidate. Quotes becom
 ineligible for recording after 15 minutes or game start; refresh and analyze again.
 Existing paper-pick snapshots are unchanged. Export recommendations for the summary
 or export all quotes for the full comparison.
+
+## Historical NFL probability validation
+
+Under **Model performance**, click **Run NFL validation report** after preparing
+NFL metrics with the automatic download. At least three historical seasons are
+needed. With the default 2022 start, 2022 trains the base model, 2023 fits a
+sigmoid calibration candidate using the frozen model's scores, and 2024 evaluates
+both. Subsequent folds expand the training history, use the preceding season for
+calibration, and test the next season. Results unavailable at each input cutoff
+are excluded. This is a fixed research procedure, separate from the live model's
+80/20 validation and final refit; the displayed error is not an identical replay
+of the live production training policy.
+
+The report includes seasonal accuracy/Brier/log loss, a constant historical
+home-win baseline, reliability bins with counts and approximate Wilson intervals,
+and breakdowns by which side the model favors. Those are not sportsbook
+favorite/underdog labels. The report does not infer profitability or market
+superiority without historical timestamped odds. Historical corrections and
+reconstructed publication timestamps still limit point-in-time claims. The
+current season is partial; interval assumptions can fail with correlated games.
+
+Reports and predictions are exported to `artifacts/sports_lab/nfl_validation`,
+including input hash and latest result timestamp. Re-run after refreshing data.
+No live probability, model version, or saved paper pick is changed. A candidate
+calibrator is not automatically adopted even when one period improves. These
+reviewed periods become development data; future promotion needs new evidence.

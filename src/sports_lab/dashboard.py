@@ -192,3 +192,43 @@ with performance_tab:
         st.dataframe(selected_forecasts, hide_index=True)
         st.download_button('Export prospective forecasts', selected_forecasts.to_csv(index=False), 'forecasts.csv')
     st.caption('Accuracy alone does not measure betting value. Brier measures probability error; lower is better. Fewer than 100 graded games is marked collecting evidence. This threshold is a monitoring rule, not statistical proof. Automatic model promotion and calibration are not enabled yet.')
+    if sport == 'NFL':
+        st.divider()
+        st.subheader('Historical probability validation · research only')
+        st.write('Evaluate later seasons using a model trained on earlier seasons and a separate preceding calibration season. This report does not update the live model or saved picks.')
+        history_file = ledger.path.parents[2] / 'data/sports_lab/nfl/history.csv'
+        if not history_file.exists():
+            st.info('Use Download NFL data and analyze first to prepare historical metrics.')
+        elif st.button('Run NFL validation report'):
+            try:
+                from sports_lab.validation import validate_history, save_report
+                with st.spinner('Testing chronological predictions and calibration…'):
+                    result = validate_history(pd.read_csv(history_file), 'NFL')
+                    save_report(result, ledger.path.parents[2] / 'artifacts/sports_lab/nfl_validation')
+                    st.session_state['nfl_validation'] = result
+            except (ValueError, KeyError, OSError) as exc:
+                st.error(str(exc))
+        result = st.session_state.get('nfl_validation')
+        if result:
+            summary = result['summary']
+            st.caption(f"Generated {summary['generated_at']} · {summary['evaluated_games']} evaluated games across {summary['folds']} seasonal folds")
+            st.caption('Latest result in cached input: ' + summary['latest_input_result'])
+            st.caption('Historical sportsbook comparison: unavailable until timestamped odds are supplied. No bookmaker favorite/underdog breakdown or betting ROI is inferred from these statistics.')
+            if summary['calibrated_brier'] >= summary['raw_brier']:
+                st.info('This calibration candidate did not improve overall Brier score. It has not been applied to live predictions.')
+            cols = st.columns(3)
+            cols[0].metric('Uncalibrated Brier', f"{summary['raw_brier']:.3f}")
+            cols[1].metric('Calibration candidate Brier', f"{summary['calibrated_brier']:.3f}")
+            cols[2].metric('Historical baseline Brier', f"{summary['baseline_brier']:.3f}")
+            st.write('Season-by-season results · lower Brier and log loss are better')
+            st.dataframe(result['seasons'],hide_index=True)
+            st.write('Calibration: predicted home win probability versus observed home win rate')
+            st.dataframe(result['reliability'],hide_index=True)
+            plot = result['reliability'].pivot(index='mean_probability',columns='model',values='observed_home_win_rate')
+            st.scatter_chart(plot,x_label='Mean predicted home win probability',y_label='Observed home win rate')
+            st.write('Breakdown by model direction · not sportsbook favorites/underdogs')
+            st.dataframe(result['directions'],hide_index=True)
+            for limitation in summary['limitations']:
+                st.caption(limitation)
+            for name in ['seasons','predictions','reliability','directions']:
+                st.download_button('Export validation '+name,result[name].to_csv(index=False),f'validation_{name}.csv')
