@@ -180,34 +180,52 @@ retries individual dates and caches the range only after every daily request
 succeeds. A daily error is surfaced, never silently treated as an empty schedule.
 Daily fallback can increase first-run download time; subsequent runs reuse caches.
 
-## College team-strength model research
+## College team-strength research: weekly walk-forward v2
 
-Select NCAAB or NCAAF, open **Model performance**, then click **Download [sport]
-research history and compare**. This downloads three completed competitive seasons
-plus the current season using the same ESPN cache and date-range fallback. First
-use can take several minutes. Research does not need an Odds API key or consume
-paid odds requests, and it does not require upcoming scheduled games.
+Select NCAAB or NCAAF, open **Model performance**, and click **Run [sport] weekly
+research comparison**. Leave **Reuse downloaded college research history** checked
+to use the same input as the previous report without downloading again. If cached
+research history is unavailable, or reuse is unchecked, the app downloads three
+completed seasons plus the current season. No paid odds requests are made.
 
-The candidate fits opponent-adjusted scoring-margin team ratings with Ridge
-regression: home-team coefficient minus away-team coefficient plus a learned
-home-advantage coefficient (zero on neutral sites). Fixed exploratory defaults
-are alpha=10, 365-day recency half-life, margins capped at 40 basketball points
-or 45 football points. Prior-season held-out margins train a sigmoid probability
-mapping; the following season is evaluated without refitting the candidate on
-its results. Elo replays its existing sequential algorithm over the same extended
-history and can update after earlier test results become available. The training
-policies differ; this is not an exact reproduction of old 550-day saved forecasts.
+Before each test week, both models receive exactly the same completed games from
+the prior 730 days, available before Monday 00:00 America/Chicago minus one
+microsecond. Ratings stay frozen for the entire test week. The Elo algorithm is
+replayed on that history; the candidate refits opponent-adjusted margin ratings.
+This weekly Elo policy differs from the live game-by-game model and from the
+older seasonal research comparison. Compare the models within this report;
+do not treat changed scores versus the old report as proof of improvement.
 
-The panel shows Brier, log loss, accuracy, scoring-margin MAE, unknown-participant
-counts, and calibration by season. The candidate uses final scores and opponent
-identity, not possession-adjusted efficiency, EPA, transfers, injuries, or starters.
-No scoring-margin rating should be described as KenPom or another proprietary
-rating. Historical publication times are still reconstructed, and reviewed test
-periods become development data. Current-season samples are partial. No betting
-profit or superiority to sportsbook prices is inferred without historical odds.
+Fixed candidate settings: Ridge alpha=10, 365-day recency half-life, scoring
+margins capped at 40 basketball points or 45 football points, and a learned home
+advantage (zero on neutral sites). A sigmoid probability mapping, C=1, trains only
+on earlier weekly out-of-sample margins whose results were available before the
+current cutoff. Calibration uses the prior 365 days, at least 50 games, both
+outcome classes, and established-team games. Historical margins are not recomputed
+using the latest model. The first season supplies training, the second generates
+calibration predictions, and evaluation starts in the third season. Weeks lacking
+sufficient data are explicitly reported as skipped.
 
-Research history is saved to `data/sports_lab/college/[sport]_research_history.csv`.
-Reports are written to `artifacts/sports_lab/[sport]_team_strength`. Export college
-seasons and college reliability_by_season for review. Live models, saved picks,
-and settled results are unchanged; even improved test scores do not automatically
-promote a candidate. Preserve those original records during evaluation.
+Both models are assessed on identical games. Coverage tables separate established
+history (at least 10 prior games for each participant), limited history (1–9), and
+unseen participants. Unknown participants use zero candidate team coefficients;
+the overall results still include them. Missing-history games must not be
+interpreted as trustworthy forecasts. Reliability tables are split by coverage
+and season. Inspect counts before comparing probability bins.
+
+Exports: college seasons, weeks (training/calibration cutoff audit), predictions,
+coverage, calibration_predictions (out-of-sample audit), and reliability_by_season.
+Reports use `artifacts/sports_lab/[sport]_team_strength_weekly_v2`, preserving old
+seasonal report files. Inputs remain in
+`data/sports_lab/college/[sport]_research_history.csv`; hashes and latest-result
+timestamps identify the input used. The research run never overwrites paper picks
+or changes live models, probabilities, or model versions.
+
+The candidate is still a scoring-margin model, not possession-adjusted efficiency
+or EPA. It lacks transfers, current starters, injuries, and coaching context.
+Historical publication times are conservatively reconstructed; source corrections
+can still affect the data. Current-season samples are partial. Reviewed test
+periods become development data, and future games must confirm a decision to
+promote a model. No profitable-betting claim or superiority to sportsbook prices
+is inferred without historical timestamped odds. No candidate is automatically
+promoted, regardless of the research scores.
