@@ -179,3 +179,35 @@ explicitly. If ESPN rejects a multi-day request with HTTP 400, the collector
 retries individual dates and caches the range only after every daily request
 succeeds. A daily error is surfaced, never silently treated as an empty schedule.
 Daily fallback can increase first-run download time; subsequent runs reuse caches.
+
+## College team-strength model research
+
+Select NCAAB or NCAAF, open **Model performance**, then click **Download [sport]
+research history and compare**. This downloads three completed competitive seasons
+plus the current season using the same ESPN cache and date-range fallback. First
+use can take several minutes. Research does not need an Odds API key or consume
+paid odds requests, and it does not require upcoming scheduled games.
+
+The candidate fits opponent-adjusted scoring-margin team ratings with Ridge
+regression: home-team coefficient minus away-team coefficient plus a learned
+home-advantage coefficient (zero on neutral sites). Fixed exploratory defaults
+are alpha=10, 365-day recency half-life, margins capped at 40 basketball points
+or 45 football points. Prior-season held-out margins train a sigmoid probability
+mapping; the following season is evaluated without refitting the candidate on
+its results. Elo replays its existing sequential algorithm over the same extended
+history and can update after earlier test results become available. The training
+policies differ; this is not an exact reproduction of old 550-day saved forecasts.
+
+The panel shows Brier, log loss, accuracy, scoring-margin MAE, unknown-participant
+counts, and calibration by season. The candidate uses final scores and opponent
+identity, not possession-adjusted efficiency, EPA, transfers, injuries, or starters.
+No scoring-margin rating should be described as KenPom or another proprietary
+rating. Historical publication times are still reconstructed, and reviewed test
+periods become development data. Current-season samples are partial. No betting
+profit or superiority to sportsbook prices is inferred without historical odds.
+
+Research history is saved to `data/sports_lab/college/[sport]_research_history.csv`.
+Reports are written to `artifacts/sports_lab/[sport]_team_strength`. Export college
+seasons and college reliability_by_season for review. Live models, saved picks,
+and settled results are unchanged; even improved test scores do not automatically
+promote a candidate. Preserve those original records during evaluation.

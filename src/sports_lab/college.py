@@ -69,7 +69,7 @@ def fetch_games(sport, start, end, cache, refresh=False):
     return pd.DataFrame(rows,columns=COLUMNS)
 
 
-def forecast(history, upcoming, sport, now=None):
+def forecast(history, upcoming, sport, now=None, *, include_audit=False):
     now=utc(now) if now is not None else now_utc()
     h=history.copy();u=upcoming.copy()
     if u.empty:
@@ -129,6 +129,8 @@ def forecast(history, upcoming, sport, now=None):
             why=f'Results-only Elo: home {ratings.get(r.home,1500):.0f}, away {ratings.get(r.away,1500):.0f}; '+
                 ('neutral venue; ' if r.neutral else '55-point home-rating adjustment; ')+
                 f'available history home {counts.get(r.home,0)} games, away {counts.get(r.away,0)} games. No player or advanced-stat inputs.'))
+    if include_audit:
+        report['audit']=audit
     return pd.DataFrame(rows),report
 
 
@@ -158,8 +160,14 @@ def load(root,sport,date,now=None):
     today=today.loc[today.commence_time.map(utc)>now]
     if today.empty:
         raise ValueError('All games on this date have started or no upcoming events are available.')
-    start=pd.Timestamp(date)-pd.Timedelta(days=550)
-    end=pd.Timestamp(date)-pd.Timedelta(days=1)
+    history=load_history(root,sport,pd.Timestamp(date)-pd.Timedelta(days=550),pd.Timestamp(date)-pd.Timedelta(days=1),now)
+    return history,today
+
+
+def load_history(root,sport,start,end,now=None):
+    now=utc(now) if now is not None else now_utc()
+    start,end=pd.Timestamp(start),pd.Timestamp(end)
+    cache=Path(root)/'data/sports_lab/college'
     chunks=[]
     # Historical baseline covers ordinary competitive seasons, not exhibitions/spring games.
     if sport=='NCAAB':
@@ -176,7 +184,7 @@ def load(root,sport,date,now=None):
         day,last=window[0],window[-1]
         chunks.append(fetch_games(sport,day,last,cache,refresh=last.date()>=(now-pd.Timedelta(days=3)).date()))
     history=pd.concat(chunks,ignore_index=True).drop_duplicates('event_id')
-    return history,today
+    return history
 
 
 def save_mapping(root,sport,upcoming):

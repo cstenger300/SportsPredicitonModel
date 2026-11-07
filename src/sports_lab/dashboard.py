@@ -285,3 +285,40 @@ with performance_tab:
                 st.caption(limitation)
             for name in ['seasons','predictions','reliability','reliability_by_season','directions']:
                 st.download_button('Export validation '+name,result[name].to_csv(index=False),f'validation_{name}.csv')
+    if sport in ['NCAAB','NCAAF']:
+        st.divider()
+        st.subheader('College team-strength research · no live model changes')
+        st.write('Compare the existing Elo algorithm with opponent-adjusted scoring-margin ratings using extended history. The candidate accounts for opponent strength, home advantage, and recency, then maps margins to win probabilities using a separate prior calibration season. Possession efficiency and player availability are not included.')
+        st.caption('This comparison requires multiple seasons. Downloading three completed seasons plus the current season can take several minutes. Existing cached requests are reused. No odds requests are made by this research panel.')
+        if st.button('Download '+sport+' research history and compare'):
+            try:
+                from sports_lab.college import load_history
+                from sports_lab.college_research import compare_models,save_comparison
+                root=ledger.path.parents[2]
+                today=pd.Timestamp.now(tz='America/Chicago').normalize().tz_localize(None)
+                season_year=today.year if today.month>=7 else today.year-1
+                with st.spinner('Downloading seasonal history and comparing team-strength models…'):
+                    research_history=load_history(root,sport,pd.Timestamp(year=season_year-3,month=7,day=1),today-pd.Timedelta(days=1))
+                    research_history.to_csv(root/'data/sports_lab/college'/f'{sport}_research_history.csv',index=False)
+                    comparison=compare_models(research_history,sport)
+                    save_comparison(comparison,root/'artifacts/sports_lab'/f'{sport}_team_strength')
+                    st.session_state['college_research_'+sport]=comparison
+            except (ValueError,KeyError,OSError) as exc:
+                st.error(str(exc))
+        comparison=st.session_state.get('college_research_'+sport)
+        if comparison:
+            stats=comparison['summary']
+            st.caption(f"{stats['evaluated_games']} evaluated games across {stats['folds']} later-season periods · {stats['generated_at']}")
+            c=st.columns(3)
+            c[0].metric('Elo algorithm replay Brier',f"{stats['elo_brier']:.3f}")
+            c[1].metric('Margin candidate Brier',f"{stats['candidate_brier']:.3f}")
+            c[2].metric('Home-win baseline Brier',f"{stats['baseline_brier']:.3f}")
+            st.info('Lower Brier is better. Even if the candidate improves, no live model is automatically replaced. We must review seasonal results, log loss, coverage, and calibration before considering promotion.')
+            st.dataframe(comparison['seasons'],hide_index=True)
+            seasonal=comparison['reliability_by_season']
+            selected_season=st.selectbox('College calibration season',sorted(seasonal.season.unique()),key='college_research_season_'+sport)
+            st.dataframe(seasonal.loc[seasonal.season.eq(selected_season)],hide_index=True)
+            for limitation in stats['limitations']:
+                st.caption(limitation)
+            for name in ['seasons','predictions','reliability_by_season']:
+                st.download_button('Export college '+name,comparison[name].to_csv(index=False),sport+'_college_'+name+'.csv')
