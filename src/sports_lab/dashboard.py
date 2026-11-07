@@ -6,6 +6,7 @@ from sports_lab.core import METRICS, Ledger, fit_model, rank_quotes
 from sports_lab import provider
 from sports_lab.performance import ForecastStore
 from sports_lab.recommendations import summarize_quotes
+from sports_lab.shadow import ShadowStore
 st.set_page_config(page_title='Sports Edge Lab', page_icon='📊', layout='wide')
 st.title('Sports Edge Lab')
 st.caption('NBA · NHL · NFL · NCAAB · NCAAF · Tennis | Advanced metrics · Sportsbook comparison · Paper results')
@@ -13,6 +14,7 @@ sport = st.sidebar.selectbox('Sport', list(METRICS))
 st.sidebar.info('Moneylines only. Research probabilities are not calibrated confidence levels. No real wagers are placed.')
 ledger = Ledger(Path(__file__).resolve().parents[2] / 'data/sports_lab/paper.sqlite')
 forecast_store = ForecastStore(ledger.path)
+shadow_store = ShadowStore(ledger.path)
 board, tracker, performance_tab, help_tab = st.tabs(['Find value', 'Results tracker', 'Model performance', 'Data and methodology'])
 key = provider.KEYS.get(sport)
 with help_tab:
@@ -104,6 +106,29 @@ with board:
                     st.success('College baseline forecasts ready. These are not validated advanced-metric recommendations.')
             except (ValueError,KeyError,OSError) as exc:
                 st.error(str(exc))
+    if sport in ['NCAAB','NCAAF']:
+        st.subheader('Prospective side-by-side test · no bets')
+        st.caption('Save weekly Elo and margin-candidate probabilities for all upcoming matchups with at least 10 prior games per team. This is separate from paper picks and does not select wagers. No odds key is needed. A completed college research-history download is required.')
+        if st.button('Record both models for upcoming '+sport+' games'):
+            try:
+                from sports_lab.college import load
+                from sports_lab.shadow import predict_pair
+                root=ledger.path.parents[2]
+                research_file=root/'data/sports_lab/college'/f'{sport}_research_history.csv'
+                if not research_file.exists():
+                    raise ValueError('Run the college weekly research comparison first to download the extended history.')
+                with st.spinner('Refreshing public results and generating the paired pregame snapshot…'):
+                    recent,upcoming_games=load(root,sport,college_date)
+                    combined=pd.concat([pd.read_csv(research_file),recent],ignore_index=True)
+                    combined['event_id']=combined.event_id.astype(str)
+                    combined=combined.drop_duplicates('event_id',keep='last')
+                    paired=predict_pair(combined,upcoming_games,sport)
+                    added=shadow_store.record(paired)
+                skipped=int(paired.coverage.ne('Established history').sum())
+                st.success(f'{added} new paired game forecasts saved. {skipped} matchups excluded for insufficient history. Existing snapshots were preserved.')
+                st.dataframe(paired[['home','away','commence_time','elo_home_probability','margin_home_probability','coverage']],hide_index=True)
+            except (ValueError,KeyError,OSError) as exc:
+                st.error(str(exc))
     history = st.file_uploader('Historical pregame metrics CSV', type='csv', key=f'h_{sport}')
     upcoming = st.file_uploader('Upcoming pregame metrics CSV', type='csv', key=f'u_{sport}')
     quotes_file = st.file_uploader('Optional odds CSV · overrides live prices', type='csv', key=f'q_{sport}')
@@ -173,15 +198,20 @@ with board:
 
 with tracker:
     auto_scores = st.checkbox('Automatically refresh final scores every 15 minutes while open', value=False)
-    st.caption('Uses The Odds API quota. Checks the selected sport/tournament; catches up on load when enabled. Older than three days or unsupported score feeds require reviewed CSV results.')
+    st.caption('College sports use public ESPN finals; other sports use The Odds API quota. Checks the selected sport/tournament while open. Results older than three days may require reviewed CSV imports.')
     @st.fragment(run_every='15m' if auto_scores else None)
     def refresh_scores_automatically():
         if auto_scores and key:
             try:
-                results = provider.scores(sport, key)
+                if sport in ['NCAAB','NCAAF']:
+                    from sports_lab.college import final_results
+                    results=final_results(ledger.path.parents[2],sport)
+                else:
+                    results = provider.scores(sport, key)
                 forecast_store.settle(results)
+                shadow_count=shadow_store.settle(results)
                 count = ledger.settle(results)
-                st.caption(f'Latest automatic check: {pd.Timestamp.now(tz="America/Chicago").strftime("%b %d %I:%M %p %Z")} · {count} newly settled picks. Reopen Results tracker to reload the table.')
+                st.caption(f'Latest automatic check: {pd.Timestamp.now(tz="America/Chicago").strftime("%b %d %I:%M %p %Z")} · {count} newly settled picks, {shadow_count} paired forecasts. Reopen the table to reload results.')
             except ValueError as exc:
                 st.warning(str(exc))
     refresh_scores_automatically()
@@ -190,6 +220,7 @@ with tracker:
         try:
             results = provider.scores(sport,key)
             forecast_store.settle(results)
+            shadow_count=shadow_store.settle(results)
             st.success(f'{ledger.settle(results)} picks settled.')
         except ValueError as e:
             st.error(str(e))
@@ -198,7 +229,8 @@ with tracker:
             from sports_lab.college import final_results
             results=final_results(ledger.path.parents[2],sport)
             forecast_store.settle(results)
-            st.success(f'{ledger.settle(results)} college paper picks settled.')
+            shadow_count=shadow_store.settle(results)
+            st.success(f'{ledger.settle(results)} college paper picks and {shadow_count} paired forecasts settled.')
         except (ValueError,KeyError,OSError) as exc:
             st.error(str(exc))
     uploaded = st.file_uploader('Reviewed final results CSV', type='csv')
@@ -206,6 +238,7 @@ with tracker:
         try:
             results = pd.read_csv(uploaded)
             forecast_store.settle(results)
+            shadow_count=shadow_store.settle(results)
             st.success(f'{ledger.settle(results)} picks settled.')
         except (ValueError, KeyError) as e:
             st.error(str(e))
@@ -285,6 +318,21 @@ with performance_tab:
                 st.caption(limitation)
             for name in ['seasons','predictions','reliability','reliability_by_season','directions']:
                 st.download_button('Export validation '+name,result[name].to_csv(index=False),f'validation_{name}.csv')
+    if sport in ['NCAAB','NCAAF']:
+        st.divider()
+        st.subheader('Paired prospective forecasts')
+        pairs=shadow_store.rows()
+        if pairs.empty or pairs.loc[pairs.sport.eq(sport)].empty:
+            st.info('In Find value, select a future college game date and click Record both models for upcoming games. No paper pick or odds download is required.')
+        else:
+            pairs=pairs.loc[pairs.sport.eq(sport)]
+            st.caption(f"{len(pairs)} paired games saved · {pairs.winner.isna().sum()} pending. Original probabilities cannot be overwritten. These are forecast results, not a betting ROI record.")
+            st.dataframe(pairs[['home','away','commence_time','elo_home_probability','margin_home_probability','status','elo_brier','margin_brier']],hide_index=True)
+            paired_summary=shadow_store.summary(sport)
+            if not paired_summary.empty:
+                st.dataframe(paired_summary,hide_index=True)
+            st.caption('After games finish, open Results tracker and click Refresh college finals from public data. Shadow forecasts use public event IDs. Model versions, input cutoffs, and original probabilities are preserved. Small samples are exploratory; no model is automatically promoted.')
+            st.download_button('Export paired forecasts',pairs.to_csv(index=False),sport+'_paired_forecasts.csv')
     if sport in ['NCAAB','NCAAF']:
         st.divider()
         st.subheader('College team-strength research · no live model changes')

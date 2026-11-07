@@ -229,3 +229,35 @@ periods become development data, and future games must confirm a decision to
 promote a model. No profitable-betting claim or superiority to sportsbook prices
 is inferred without historical timestamped odds. No candidate is automatically
 promoted, regardless of the research scores.
+
+## Prospective paired college testing
+
+After reviewing the weekly report, choose NCAAB or NCAAF under Find value and
+select an upcoming game date. Click **Record both models for upcoming [sport]
+games**. The app refreshes recent public results, merges them with the cached
+extended research history (normalizing IDs to avoid duplicate counting), and saves
+both weekly Elo and margin-candidate home-win probabilities. No odds download,
+paid request, or paper-pick selection is required. Complete the research-history
+download for that sport first if the app requests it.
+
+Both models use the weekly v2 protocol. The training cutoff is the beginning of
+the target week, or the generation time when forecasting before that week begins.
+Calibration uses only available earlier out-of-sample predictions. Model versions,
+cutoffs, and generation times are recorded. Only games with at least 10 available
+prior games per team are saved; excluded counts are shown. A game must still be
+upcoming when the record is written. The first paired snapshot per sport/event
+is immutable, even if the button is clicked again after refreshed data arrives.
+
+See **Model performance → Paired prospective forecasts** to confirm pending
+records. After games finish, use **Results tracker → Refresh college finals from
+public data**. The opt-in 15-minute automatic college refresh also uses public
+finals while the app session is open. Public event IDs allow grading independently
+of sportsbook name matching. Both models are evaluated on the same decisive games;
+voids are retained and excluded from accuracy/Brier/log-loss summaries. This is
+forecast evaluation, not a betting ROI record, and it never changes existing picks
+or promotes a model. Export paired forecasts for review as the sample grows.
+
+Paired snapshots use a separate `shadow_forecasts` table in the existing
+`data/sports_lab/paper.sqlite`. Preserve this database when updating code. As with
+all college models here, roster/injury context and historical publication-time
+limitations remain; probability estimates are experimental.
