@@ -64,9 +64,10 @@ def fetch_games(sport, start, end, cache, refresh=False):
             h,a=competitors['home'],competitors['away']
             completed=bool(competition.get('status',event.get('status',{})).get('type',{}).get('completed',False))
             rows.append(dict(event_id=str(event['id']),home=h['team']['displayName'],away=a['team']['displayName'],
+                home_id=str(h['team'].get('id','')),away_id=str(a['team'].get('id','')),
                 commence_time=event['date'],completed=completed,home_score=float(h['score']) if completed and h.get('score') is not None else np.nan,
                 away_score=float(a['score']) if completed and a.get('score') is not None else np.nan,neutral=bool(competition.get('neutralSite',False))))
-    return pd.DataFrame(rows,columns=COLUMNS)
+    return pd.DataFrame(rows,columns=COLUMNS+['home_id','away_id'])
 
 
 def forecast(history, upcoming, sport, now=None, *, include_audit=False):
@@ -74,6 +75,9 @@ def forecast(history, upcoming, sport, now=None, *, include_audit=False):
     h=history.copy();u=upcoming.copy()
     if u.empty:
         raise ValueError('No upcoming college games found for that date.')
+    from sports_lab.quality import annotate_schedule
+    u['sport']=sport
+    u=annotate_schedule(u)
     for frame in [h,u]:
         frame['commence_time']=frame.commence_time.map(utc)
     if (u.commence_time<=now).any():
@@ -125,7 +129,8 @@ def forecast(history, upcoming, sport, now=None, *, include_audit=False):
     for r in u.itertuples():
         p=probability(r.home,r.away,r.commence_time,r.neutral)
         rows.append(dict(event_id=str(r.event_id),home=r.home,away=r.away,commence_time=r.commence_time,metrics_as_of=now,
-            home_probability=p,out_of_distribution=min(counts.get(r.home,0),counts.get(r.away,0))<10,
+            home_probability=p,out_of_distribution=min(counts.get(r.home,0),counts.get(r.away,0))<10 or bool(getattr(r,'data_quality_review',False)),
+            data_quality_review=bool(getattr(r,'data_quality_review',False)),data_quality_reason=getattr(r,'data_quality_reason',''),
             why=f'Results-only Elo: home {ratings.get(r.home,1500):.0f}, away {ratings.get(r.away,1500):.0f}; '+
                 ('neutral venue; ' if r.neutral else '55-point home-rating adjustment; ')+
                 f'available history home {counts.get(r.home,0)} games, away {counts.get(r.away,0)} games. No player or advanced-stat inputs.'))
@@ -157,6 +162,9 @@ def load(root,sport,date,now=None):
     today=fetch_games(sport,date,date,cache,refresh=True)
     if today.empty:
         raise ValueError('No public schedule events found on the selected date.')
+    from sports_lab.quality import annotate_schedule
+    today['sport']=sport
+    today=annotate_schedule(today)
     today=today.loc[today.commence_time.map(utc)>now]
     if today.empty:
         raise ValueError('All games on this date have started or no upcoming events are available.')

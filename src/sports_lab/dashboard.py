@@ -125,8 +125,9 @@ with board:
                     paired=predict_pair(combined,upcoming_games,sport)
                     added=shadow_store.record(paired)
                 skipped=int(paired.coverage.ne('Established history').sum())
-                st.success(f'{added} new paired game forecasts saved. {skipped} matchups excluded for insufficient history. Existing snapshots were preserved.')
-                st.dataframe(paired[['home','away','commence_time','elo_home_probability','margin_home_probability','coverage']],hide_index=True)
+                flagged=int(paired.data_quality_review.sum())
+                st.success(f'{added} new paired game forecasts saved. History check flagged {skipped} matchups; schedule review flagged {flagged}. Existing snapshots were preserved.')
+                st.dataframe(paired[['home','away','commence_time','elo_home_probability','margin_home_probability','coverage','data_quality_review','data_quality_reason']],hide_index=True)
             except (ValueError,KeyError,OSError) as exc:
                 st.error(str(exc))
     history = st.file_uploader('Historical pregame metrics CSV', type='csv', key=f'h_{sport}')
@@ -327,7 +328,26 @@ with performance_tab:
         else:
             pairs=pairs.loc[pairs.sport.eq(sport)]
             st.caption(f"{len(pairs)} paired games saved · {pairs.winner.isna().sum()} pending. Original probabilities cannot be overwritten. These are forecast results, not a betting ROI record.")
-            st.dataframe(pairs[['home','away','commence_time','elo_home_probability','margin_home_probability','status','elo_brier','margin_brier']],hide_index=True)
+            st.dataframe(pairs[['home','away','commence_time','elo_home_probability','margin_home_probability','status','elo_brier','margin_brier','data_quality_review','data_quality_reason']],hide_index=True)
+            flagged=int(pairs.data_quality_review.sum())
+            if flagged:
+                st.warning(f'{flagged} saved games require schedule/identity review. The summary below excludes them; original forecasts and results remain in the export. This is a review flag, not a declaration that a game is invalid.')
+            if st.button('Audit saved '+sport+' schedules against public source'):
+                try:
+                    from sports_lab.college import fetch_games
+                    source_rows=[]
+                    days=sorted(pd.to_datetime(pairs.commence_time,utc=True).dt.tz_convert('America/New_York').dt.date.unique())
+                    for day in days:
+                        source_rows.append(fetch_games(sport,day,day,ledger.path.parents[2]/'data/sports_lab/college',refresh=True))
+                    source=pd.concat(source_rows,ignore_index=True)
+                    source['sport']=sport
+                    issues=shadow_store.audit_saved(source)
+                    st.dataframe(issues,hide_index=True)
+                    st.caption('This rechecks ESPN source identities and schedules. Repeated source data is not independent verification. Existing flags are retained until investigated; no original record is rewritten.')
+                    st.dataframe(source[['event_id','home','home_id','away','away_id','commence_time','completed','home_score','away_score']],hide_index=True)
+                    st.download_button('Export source schedule audit',source.to_csv(index=False),sport+'_source_schedule_audit.csv')
+                except (ValueError,KeyError,OSError) as exc:
+                    st.error(str(exc))
             paired_summary=shadow_store.summary(sport)
             if not paired_summary.empty:
                 st.dataframe(paired_summary,hide_index=True)

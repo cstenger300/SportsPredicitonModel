@@ -50,7 +50,7 @@ def test_alignment_refuses_guessing_and_persists_public_ids(tmp_path):
 def test_fetch_only_completed_scores_and_cache(monkeypatch,tmp_path):
     calls=[]
     payload={'events':[dict(id='1',date='2026-11-06T23:00:00Z',competitions=[dict(neutralSite=True,status={'type':{'completed':False}},competitors=[
-        dict(homeAway='home',team={'displayName':'A'},score='0'),dict(homeAway='away',team={'displayName':'B'},score='0')])])]}
+        dict(homeAway='home',team={'id':'home-provider-id','displayName':'A'},score='0'),dict(homeAway='away',team={'id':'away-provider-id','displayName':'B'},score='0')])])]}
     class Response:
         def raise_for_status(self):pass
         def json(self):return payload
@@ -58,6 +58,7 @@ def test_fetch_only_completed_scores_and_cache(monkeypatch,tmp_path):
     monkeypatch.setattr(college.requests,'get',get)
     f=college.fetch_games('NCAAB','2026-11-06','2026-11-06',tmp_path)
     assert pd.isna(f.iloc[0].home_score)
+    assert f.iloc[0].home_id=='home-provider-id' and f.iloc[0].away_id=='away-provider-id'
     college.fetch_games('NCAAB','2026-11-06','2026-11-06',tmp_path)
     assert len(calls)==1
     assert calls[0]['params']['dates']=='20261106'

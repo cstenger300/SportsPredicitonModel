@@ -261,3 +261,36 @@ Paired snapshots use a separate `shadow_forecasts` table in the existing
 `data/sports_lab/paper.sqlite`. Preserve this database when updating code. As with
 all college models here, roster/injury context and historical publication-time
 limitations remain; probability estimates are experimental.
+
+## College schedule and identity review
+
+Public college downloads retain provider team IDs when available. Before new
+college candidates or paired snapshots are accepted, the app checks whether the
+same participant appears in different fixtures less than four hours apart, whether
+a displayed name corresponds to conflicting IDs in that window, and whether the
+same event ID has inconsistent participants/start times. The four-hour threshold
+is a review heuristic, not proof of an invalid game; separate squads or provider
+corrections may explain a flag. Name normalization is used when old saved records
+lack provider IDs. It does not silently guess a replacement identity.
+
+Flagged games are blocked from new paired records. Repeated recordings are also
+checked against existing snapshots, so recording one conflicting game in a later
+batch does not evade the check. Existing snapshots, winners, probabilities, and
+paper bets are never deleted or rewritten. Schedule observations are retained in
+an additive `shadow_quality_flags` table. Paired summaries exclude unresolved
+review flags by default, and exports retain all original rows with review columns.
+This changes the displayed evaluation cohort transparently, not the predictions.
+
+Under **Model performance → Paired prospective forecasts**, use **Audit saved
+[sport] schedules against public source** to refresh ESPN events for the saved
+dates and inspect team IDs, start times, and final scores. Export the source
+schedule audit for investigation. This reuses the same provider and is not an
+independent verification of that provider's data. Upstream repeated fixtures must
+be investigated before conclusions are drawn. Flags are not automatically cleared
+or turned into void results. No sportsbook settlement rule is changed.
+
+These checks cover selected public schedules and saved paired forecasts. They do
+not retroactively certify or clean the entire historical training dataset. A
+source audit can reveal upstream identity problems that require a separate data
+correction before trusting model comparisons. Review flags depend only on schedule
+and participant information, never on which model won or lost.

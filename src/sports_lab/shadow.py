@@ -12,6 +12,7 @@ from sklearn.pipeline import make_pipeline
 from sports_lab.college import forecast, COLUMNS
 from sports_lab.college_research import compare_models, design, week_cutoff, PROTOCOL
 from sports_lab.core import utc, now_utc
+from sports_lab.quality import audit_schedule, annotate_schedule, ISSUE_COLUMNS
 
 
 def predict_pair(history,upcoming,sport,now=None):
@@ -49,7 +50,8 @@ def predict_pair(history,upcoming,sport,now=None):
     counts=pd.concat([train.home,train.away]).value_counts()
     digest=hashlib.sha256((PROTOCOL+sport+cutoff.isoformat()+train[COLUMNS].to_json(date_format='iso')+
         calibration.to_json(date_format='iso')).encode()).hexdigest()
-    output=u[['event_id','home','away','commence_time']].copy()
+    extra=[name for name in ['home_id','away_id','data_quality_review','data_quality_reason'] if name in u]
+    output=u[['event_id','home','away','commence_time']+extra].copy()
     output['sport']=sport;output['protocol']=PROTOCOL
     output['generated_at']=now;output['training_cutoff']=cutoff
     output['latest_training_result']=train.commence_time.max()+pd.Timedelta(days=1)
@@ -61,7 +63,7 @@ def predict_pair(history,upcoming,sport,now=None):
     output['away_history_games']=u.away.map(counts).fillna(0).astype(int)
     minimum=np.minimum(output.home_history_games,output.away_history_games)
     output['coverage']=np.where(minimum>=10,'Established history',np.where(minimum==0,'Unseen participant','Limited history (1–9 games)'))
-    return output
+    return annotate_schedule(output)
 
 
 class ShadowStore:
@@ -72,13 +74,31 @@ class ShadowStore:
                 sport TEXT,event_id TEXT,recorded_at TEXT,snapshot TEXT,winner TEXT,
                 PRIMARY KEY(sport,event_id))''')
 
+            db.execute('''CREATE TABLE IF NOT EXISTS shadow_quality_flags (
+                sport TEXT,event_id TEXT,reason TEXT,observed_at TEXT,
+                PRIMARY KEY(sport,event_id,reason))''')
+
     def connect(self):
         return sqlite3.connect(self.path)
 
     def record(self,frame,now=None):
         now=utc(now) if now is not None else now_utc()
+        existing=self.rows()
+        combined=pd.concat([existing,frame],ignore_index=True) if not existing.empty else frame.copy()
+        issues=audit_schedule(combined)
+        supplied=[]
+        for row in frame.to_dict('records'):
+            if pd.notna(row.get('data_quality_review')) and bool(row.get('data_quality_review',False)):
+                supplied.append(dict(sport=str(row['sport']),event_id=str(row['event_id']),team='',
+                    reason=row.get('data_quality_reason') or 'Source schedule requires review.',related_event_id=''))
+        issues=pd.concat([issues,pd.DataFrame(supplied,columns=ISSUE_COLUMNS)],ignore_index=True).drop_duplicates()
+        with self.connect() as db:
+            held={(str(s),str(e)) for s,e in db.execute('SELECT sport,event_id FROM shadow_quality_flags')}
+        blocked=held|{(r.sport,r.event_id) for r in issues.itertuples()}
         rows=[]
         for row in frame.to_dict('records'):
+            if bool(row.get('data_quality_review',False)) or (str(row['sport']),str(row['event_id'])) in blocked:
+                continue
             if row['coverage']!='Established history':
                 continue
             if utc(row['commence_time'])<=now or utc(row['generated_at'])>now or utc(row['training_cutoff'])>now:
@@ -89,6 +109,8 @@ class ShadowStore:
                 raise ValueError('Paired probabilities must be finite and between zero and one.')
             rows.append((row['sport'],str(row['event_id']),now.isoformat(),json.dumps(row,default=str,sort_keys=True)))
         with self.connect() as db:
+            db.executemany('INSERT OR IGNORE INTO shadow_quality_flags VALUES (?,?,?,?)',
+                [(r.sport,r.event_id,r.reason,now.isoformat()) for r in issues.itertuples()])
             before=db.total_changes
             db.executemany('INSERT OR IGNORE INTO shadow_forecasts VALUES (?,?,?,?,NULL)',rows)
             return db.total_changes-before
@@ -132,12 +154,33 @@ class ShadowStore:
                 row[name+'_correct']=None if outcome is None else int((p>=.5)==bool(outcome))
                 row[name+'_log_loss']=None if outcome is None else float(-np.log(p if outcome else 1-p))
             rows.append(row)
-        return pd.DataFrame(rows)
+        frame=pd.DataFrame(rows)
+        if not frame.empty:
+            frame=annotate_schedule(frame)
+            with self.connect() as db:
+                flags=db.execute('SELECT sport,event_id,reason FROM shadow_quality_flags').fetchall()
+            for sport,event,reason in flags:
+                mask=frame.sport.eq(sport)&frame.event_id.astype(str).eq(str(event))
+                frame.loc[mask,'data_quality_review']=True
+                frame.loc[mask,'data_quality_reason']=frame.loc[mask,'data_quality_reason'].map(lambda old: '; '.join(dict.fromkeys(x for x in [old,reason] if x)))
+        return frame
 
-    def summary(self,sport):
+    def audit_saved(self,source_games=None,now=None):
+        now=utc(now) if now is not None else now_utc()
+        saved=self.rows()
+        combined=pd.concat([saved,source_games],ignore_index=True) if source_games is not None else saved
+        issues=audit_schedule(combined)
+        with self.connect() as db:
+            db.executemany('INSERT OR IGNORE INTO shadow_quality_flags VALUES (?,?,?,?)',
+                [(r.sport,r.event_id,r.reason,now.isoformat()) for r in issues.itertuples()])
+        return issues
+
+    def summary(self,sport,include_review=False):
         rows=self.rows()
         if rows.empty:
             return pd.DataFrame()
         rows=rows.loc[rows.sport.eq(sport)&rows.winner.isin(['home','away'])]
+        if not include_review:
+            rows=rows.loc[~rows.data_quality_review]
         return pd.DataFrame([dict(model=name,games=len(rows),accuracy=rows[name+'_correct'].mean(),
             brier=rows[name+'_brier'].mean(),log_loss=rows[name+'_log_loss'].mean()) for name in ['elo','margin']]) if len(rows) else pd.DataFrame()
