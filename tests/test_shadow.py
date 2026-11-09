@@ -55,7 +55,7 @@ def test_shadow_controls_render(tmp_path,monkeypatch):
     store=ShadowStore(tmp_path/'paper.sqlite')
     store.record(predict_pair(history(),upcoming(),'NCAAB',NOW),NOW)
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'src/sports_lab/dashboard.py')).run(timeout=30)
-    app.selectbox[0].select('NCAAB').run(timeout=30)
+    next(box for box in app.selectbox if box.label=='Sport').select('NCAAB').run(timeout=30)
     assert not app.exception
     assert any(b.label=='Record both models for upcoming NCAAB games' for b in app.button)
     assert any(d.label=='Export paired forecasts' for d in app.get('download_button'))

@@ -83,7 +83,7 @@ def test_college_controls_render_without_api_key(tmp_path,monkeypatch,sport):
     original=sports_lab.core.Ledger
     monkeypatch.setattr(sports_lab.core,'Ledger',lambda path:original(tmp_path/'paper.sqlite'))
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'src/sports_lab/dashboard.py')).run(timeout=30)
-    app.selectbox[0].select(sport).run(timeout=30)
+    next(box for box in app.selectbox if box.label=='Sport').select(sport).run(timeout=30)
     assert not app.exception
     assert any(b.label=='Download '+sport+' data and analyze' for b in app.button)
     assert any('experimental Elo' in h.value for h in app.subheader)

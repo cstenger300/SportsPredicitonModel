@@ -7,6 +7,7 @@ from sports_lab import provider
 from sports_lab.performance import ForecastStore
 from sports_lab.recommendations import summarize_quotes
 from sports_lab.shadow import ShadowStore
+from sports_lab.collection import CollectionStore, coverage_table, SPORTS
 st.set_page_config(page_title='Sports Edge Lab', page_icon='📊', layout='wide')
 st.title('Sports Edge Lab')
 st.caption('NBA · NHL · NFL · NCAAB · NCAAF · Tennis | Advanced metrics · Sportsbook comparison · Paper results')
@@ -15,7 +16,8 @@ st.sidebar.info('Moneylines only. Research probabilities are not calibrated conf
 ledger = Ledger(Path(__file__).resolve().parents[2] / 'data/sports_lab/paper.sqlite')
 forecast_store = ForecastStore(ledger.path)
 shadow_store = ShadowStore(ledger.path)
-board, tracker, performance_tab, help_tab = st.tabs(['Find value', 'Results tracker', 'Model performance', 'Data and methodology'])
+collection_store = CollectionStore(ledger.path.parent / 'collections')
+board, tracker, performance_tab, collection_tab, help_tab = st.tabs(['Find value', 'Results tracker', 'Model performance', 'Data collection', 'Data and methodology'])
 key = provider.KEYS.get(sport)
 with help_tab:
     st.subheader('Point-in-time advanced metrics')
@@ -42,7 +44,12 @@ with board:
         key = st.selectbox('Tournament', keys) if keys else None
     if key and st.button('Fetch current sportsbook prices'):
         try:
-            st.session_state[f'live_{sport}'] = provider.odds(key)
+            events,quotes=provider.odds(key)
+            st.session_state[f'live_{sport}']=(events,quotes)
+            try:
+                collection_store.archive_odds(sport,key,events,quotes)
+            except ValueError as archive_error:
+                st.warning(str(archive_error))
         except ValueError as e:
             st.error(str(e))
     live = st.session_state.get(f'live_{sport}')
@@ -59,6 +66,10 @@ with board:
                 from sports_lab.nfl_feed import load_inputs, align_odds
                 with st.spinner('Downloading NFL history and building pregame metrics…'):
                     h, u, manifest = load_inputs(ledger.path.parents[2], game_date, int(first_season), refresh=True)
+                    try:
+                        collection_store.archive_metrics('NFL',h,u,manifest)
+                    except ValueError as archive_error:
+                        st.warning(str(archive_error))
                     q = pd.DataFrame()
                     if live is not None and not live[0].empty:
                         u, q = align_odds(u, live[0], live[1])
@@ -404,3 +415,60 @@ with performance_tab:
                 st.caption(limitation)
             for name in ['seasons','weeks','predictions','coverage','calibration_predictions','reliability_by_season']:
                 st.download_button('Export college '+name,comparison[name].to_csv(index=False),sport+'_college_'+name+'.csv')
+
+with collection_tab:
+    st.subheader('Multi-sport data collection')
+    st.write('Archive data now while models are developed separately. Successful collection does not establish model readiness. Snapshots retain retrieval times and are never rewritten.')
+    st.dataframe(coverage_table(),hide_index=True)
+    chosen_sports=st.multiselect('Sports to collect',SPORTS,default=['NBA','NHL','NFL','NCAAB','NCAAF'])
+    collection_date=st.date_input('Public schedule date',pd.Timestamp.now(tz='America/Chicago').date(),key='collection_date')
+    public_enabled=st.checkbox('Collect public schedules and results',value=True)
+    import os
+    key_present=bool(os.environ.get('ODDS_API_KEY'))
+    st.caption('Odds API key detected.' if key_present else 'No Odds API key detected. Public collection works without it.')
+    odds_enabled=st.checkbox('Archive current sportsbook odds · uses API quota',value=False,disabled=not key_present)
+    st.caption('Odds collection requests one US-region two-way moneyline feed per selected sport/tournament per cycle. Provider credits depend on your plan and response; HTTP request counts are not a credit guarantee. Odds snapshots include returned upcoming dates, not only the public schedule date.')
+    if 'Tennis' in chosen_sports:
+        if st.button('Load active tennis tournaments for collection'):
+            try:
+                st.session_state['collection_tennis_keys']=provider.tournaments()
+            except ValueError as exc:
+                st.error(str(exc))
+        tennis_options=st.session_state.get('collection_tennis_keys',[])
+        collection_tennis_key=st.selectbox('Tennis tournament to archive',tennis_options) if tennis_options else None
+        st.caption('One active tournament per collection cycle. Public tennis schedules and advanced metrics are not connected yet.')
+    else:
+        collection_tennis_key=None
+    interval=st.selectbox('Collection interval / per-feed cooldown in minutes',[15,30,60,120],index=2)
+    auto_collect=st.checkbox('Collect periodically while this app session is open',value=False)
+    if odds_enabled:
+        odds_calls=sum(s!='Tennis' or collection_tennis_key is not None for s in chosen_sports)
+        st.caption(f'At these settings: up to {odds_calls} odds requests per cycle, about {odds_calls*60/interval:g} per hour while periodic collection is active. Loading tennis tournament metadata is a separate request.')
+    st.caption('Recurring odds calls occur only when both odds archiving and periodic collection are enabled. No collection runs while the app is closed. Recent manual price snapshots also trigger the collector cooldown.')
+    def run_selected_collection():
+        if not chosen_sports or not (public_enabled or odds_enabled):
+            st.warning('Choose at least one sport and one source.')
+            return
+        with st.spinner('Collecting selected sources and saving snapshots…'):
+            result=collection_store.collect(chosen_sports,collection_date,include_public=public_enabled,
+                include_odds=odds_enabled,tennis_key=collection_tennis_key,cooldown_minutes=interval)
+        st.dataframe(result,hide_index=True)
+    if st.button('Collect selected feeds now'):
+        run_selected_collection()
+    @st.fragment(run_every=f'{interval}m' if auto_collect else None)
+    def show_collection_status():
+        if auto_collect:
+            run_selected_collection()
+        status=collection_store.status()
+        for column in ['last_attempt','last_success']:
+            status[column]=pd.to_datetime(status[column],utc=True,format='mixed').dt.tz_convert('America/Chicago').dt.strftime('%b %d %Y %I:%M %p %Z')
+        st.write('Observed feed status · latest attempt and last successful snapshot')
+        st.dataframe(status,hide_index=True)
+        st.download_button('Export collection status',status.to_csv(index=False),'collection_status.csv')
+        runs=collection_store.runs()
+        if not runs.empty:
+            with st.expander('Collection run history and snapshot hashes'):
+                st.dataframe(runs,hide_index=True)
+                st.download_button('Export collection runs',runs.to_csv(index=False),'collection_runs.csv')
+        st.caption('Archives: data/sports_lab/collections/snapshots. Preserve this directory and runs.sqlite when moving computers. Source errors are shown explicitly; the last successful snapshot remains available. Advanced-statistics and player-availability feeds are still missing for most sports.')
+    show_collection_status()

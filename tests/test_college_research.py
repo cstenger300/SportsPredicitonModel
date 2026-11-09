@@ -65,7 +65,7 @@ def test_research_panel_renders_and_does_not_promote(tmp_path,monkeypatch):
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'src/sports_lab/dashboard.py'))
     app.session_state['college_research_v2_NCAAB']=compare_models(history(),'NCAAB',now='2026-11-07T15:00:00Z')
     app.run(timeout=30)
-    app.selectbox[0].select('NCAAB').run(timeout=30)
+    next(box for box in app.selectbox if box.label=='Sport').select('NCAAB').run(timeout=30)
     assert not app.exception
     assert any(m.label=='Margin candidate Brier' for m in app.metric)
     assert 'analysis_NCAAB' not in app.session_state

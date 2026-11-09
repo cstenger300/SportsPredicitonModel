@@ -76,8 +76,8 @@ def test_dashboard_empty_state(monkeypatch,tmp_path):
     monkeypatch.setattr(sports_lab.core,'Ledger',lambda path:original(tmp_path/'paper.sqlite'))
     app = AppTest.from_file(str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src/sports_lab/dashboard.py')).run(timeout=30)
     assert not app.exception
-    assert len(app.tabs)==4
-    assert list(app.selectbox[0].options)==list(METRICS)
+    assert len(app.tabs)==5
+    assert list(next(box for box in app.selectbox if box.label=='Sport').options)==list(METRICS)
 
 @pytest.mark.parametrize('winner,expected,profit', [('away','lost',-1), ('void','void',0)])
 def test_settlement_loss_and_void(tmp_path,winner,expected,profit):

@@ -56,7 +56,7 @@ def test_validation_ui_does_not_change_live_model(tmp_path,monkeypatch):
     app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'src/sports_lab/dashboard.py'))
     app.session_state['nfl_validation']=validate_history(history(),'NFL')
     app.run(timeout=30)
-    app.selectbox[0].select('NFL').run(timeout=30)
+    next(box for box in app.selectbox if box.label=='Sport').select('NFL').run(timeout=30)
     assert not app.exception
     assert any(m.label=='Calibration candidate Brier' for m in app.metric)
     assert 'analysis_NFL' not in app.session_state

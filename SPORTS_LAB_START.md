@@ -294,3 +294,51 @@ not retroactively certify or clean the entire historical training dataset. A
 source audit can reveal upstream identity problems that require a separate data
 correction before trusting model comparisons. Review flags depend only on schedule
 and participant information, never on which model won or lost.
+
+## Multi-sport collection dashboard
+
+Open **Data collection** to see adapter availability and observed feed status for
+NBA, NHL, NFL, NCAAB, NCAAF, and Tennis. Public schedule/results adapters are
+available for the five team sports. Public tennis schedules are not yet connected;
+select an active tournament for odds snapshots. Adapter availability is not proof
+of a successful live request; inspect the observed status after collecting.
+
+Select sports and a public schedule date, leave **Collect public schedules and
+results** enabled, and click **Collect selected feeds now**. Odds archiving and
+periodic collection are OFF by default. To archive prices, enable **Archive current
+sportsbook odds** with ODDS_API_KEY configured. This makes one US-region two-way
+moneyline request per selected sport or tennis tournament. Odds responses include
+returned upcoming dates, not only the public schedule date. Provider credits vary;
+the displayed request estimate is not a monthly cost guarantee.
+
+For recurring collection, select a 15/30/60/120-minute interval and explicitly
+enable **Collect periodically while this app session is open**. The same interval
+is a per-feed cooldown for manual collection, including failed attempts. A recent
+manual price snapshot also satisfies the cooldown. No collection runs while the
+app session is closed, and this does not install a Windows background task. Reopen
+and enable periodic collection again when needed. No requests run merely because
+you open the tab. Fix and test odds access through Find value if required.
+
+Snapshots are append-only JSON under
+`data/sports_lab/collections/snapshots/[sport]/[source]`, with retrieval timestamps,
+content hashes, row counts, and run status in `runs.sqlite`. Preserve the whole
+collections directory when transferring computers. Failed requests do not replace
+the last successful snapshot. Empty responses are recorded as empty, not fabricated
+matches. Historical source observations are not backdated; collection starts now
+and cannot reconstruct missing pregame prices from previous months. Event markers
+indicate whether retrieval preceded the listed scheduled start, not verified live
+market status. Requests and credentials are not archived as URLs or values.
+
+Existing Find value odds fetches now archive their normalized events/prices without
+an extra provider request. Automatic NFL metric generation also archives generated
+inputs and source hashes; historical NFL inputs are reconstructed, not original
+pregame archives. The collector does not itself retrain models, record bets, or
+settle picks. Continue the NCAAB paired test and its public final refresh as before.
+
+Advanced-statistics feeds remain disconnected for NBA, NHL, NCAAB, NCAAF, and
+Tennis; player availability is not connected to the multi-sport models. The
+coverage table makes these gaps explicit. A successful schedule or price download
+does not mean the corresponding prediction model is validated or ready. Public
+adapters depend on provider availability and may change. Cloud networking does not
+currently allow live ESPN checks; NBA/NHL collection was tested with fixtures and
+must be verified through the status panel on Windows.
